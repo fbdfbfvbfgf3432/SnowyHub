@@ -667,7 +667,9 @@ local function buildHub()
 				f.x = rng:NextNumber(0, 1)
 			end
 			f.frame.Position = UDim2.fromScale(f.x + math.sin(hubT + f.phase) * 0.01, f.y)
+	
 		end
+			ESP.tick()
 	end)
 
 	-- FOOTER
