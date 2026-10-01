@@ -323,6 +323,16 @@ local function buildHub()
 		end
 	end
 
+	Players.PlayerRemoving:Connect(function(plr)
+		local d = espDrawings[plr]
+		if d then
+			for _, obj in pairs(d) do
+				pcall(function() obj:Remove() end)
+			end
+			espDrawings[plr] = nil
+		end
+	end)
+
 	local function makeLine(parent, size, pos)
 		local l = Instance.new("Frame")
 		l.Size = size; l.Position = pos
