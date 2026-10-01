@@ -326,6 +326,123 @@ local function buildHub()
 	local C_LINE = Color3.fromRGB(60, 17, 24)
 	local C_DIM = Color3.fromRGB(135, 125, 135)
 	local C_RED = Color3.fromRGB(255, 70, 70)
+		--// HOME + ESP STATE (additive, nothing else reads these)
+	local state = {
+		esp = false,
+		espTeamCheck = true,
+		espMaxDist = 2000,
+	}
+
+	--// DRAWING-BASED PLAYER ESP
+	local espDrawings = {}   -- [player] = { box, name, dist }
+	local ESP = {}
+
+	local function espCleanup(plr)
+		local d = espDrawings[plr]
+		if not d then return end
+		for _, obj in pairs(d) do
+			if obj and obj.Remove then pcall(function() obj:Remove() end) end
+		end
+		espDrawings[plr] = nil
+	end
+
+	local function espEnsure(plr)
+		if espDrawings[plr] then return espDrawings[plr] end
+		if not Drawing then return nil end
+		local ok, d = pcall(function()
+			return {
+				box  = Drawing.new("Square"),
+				name = Drawing.new("Text"),
+				dist = Drawing.new("Text"),
+			}
+		end)
+		if not ok or not d then return nil end
+		d.box.Thickness = 1
+		d.box.Filled    = false
+		d.box.Color     = Color3.fromRGB(255, 70, 70)
+		d.name.Size     = 14
+		d.name.Center   = true
+		d.name.Outline  = true
+		d.dist.Size     = 12
+		d.dist.Center   = true
+		d.dist.Outline  = true
+		espDrawings[plr] = d
+		return d
+	end
+
+	ESP.tick = function()
+		if not Drawing then return end
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		local me = player
+
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr == me then continue end
+
+			local d = espEnsure(plr)
+			if not d then continue end
+
+			local hide = not state.esp
+			if state.espTeamCheck and plr.Team and me.Team and plr.Team == me.Team then
+				hide = true
+			end
+
+			local char = plr.Character
+			local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+			local head = char and char:FindFirstChild("Head")
+			local hum  = char and char:FindFirstChildOfClass("Humanoid")
+
+			if hide or not hrp or not head or not hum or hum.Health <= 0 then
+				d.box.Visible = false
+				d.name.Visible = false
+				d.dist.Visible = false
+				continue
+			end
+
+			local dist = (cam.CFrame.Position - hrp.Position).Magnitude
+			if dist > state.espMaxDist then
+				d.box.Visible = false
+				d.name.Visible = false
+				d.dist.Visible = false
+				continue
+			end
+
+			local top    = cam:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+			local bottom = cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+			local topOnScreen    = select(2, cam:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)))
+			local bottomOnScreen = select(2, cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)))
+
+			if not topOnScreen or not bottomOnScreen then
+				d.box.Visible = false
+				d.name.Visible = false
+				d.dist.Visible = false
+				continue
+			end
+
+			local h = bottom.Y - top.Y
+			if h <= 0 then
+				d.box.Visible = false
+				d.name.Visible = false
+				d.dist.Visible = false
+				continue
+			end
+			local w = h * 0.55
+
+			d.box.Size     = Vector2.new(w, h)
+			d.box.Position = Vector2.new(top.X - w / 2, top.Y)
+			d.box.Visible  = true
+
+			d.name.Text     = plr.Name
+			d.name.Position = Vector2.new(top.X, top.Y - 16)
+			d.name.Visible  = true
+
+			d.dist.Text     = string.format("%dm", math.floor(dist))
+			d.dist.Position = Vector2.new(top.X, bottom.Y + 2)
+			d.dist.Visible  = true
+		end
+	end
+
+	Players.PlayerRemoving:Connect(espCleanup)
 
 	local function makeLine(parent, size, pos)
 		local l = Instance.new("Frame")
