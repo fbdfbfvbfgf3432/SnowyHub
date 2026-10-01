@@ -659,7 +659,7 @@ local function buildHub()
 			refresh()
 		end)
 		refresh()
-		c.refresh = refresh
+		
 		return c
 	end
 
