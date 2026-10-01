@@ -15,7 +15,7 @@ local ROTATE_SPEED = 45
 local GLOW_COLOR = Color3.fromRGB(255, 30, 30)
 local LOAD_TIME = 8
 
-local HUB_NAME = "𝐂𝐫𝐬𝐜𝐱"
+local HUB_NAME = "Crscx2210"
 local HUB_NAME_CN = "克里斯克斯"
 local HUB_VERSION = "V1.0"
 local TOGGLE_KEY = Enum.KeyCode.RightShift
@@ -230,7 +230,8 @@ status.ZIndex = 5
 status.Parent = bg
 
 local function buildHub()
-	local displayName = HUB_NAME or player.Name
+	local displayName = HUB_NAME or "Crscx2210"
+	local playerName = player.Name
 
 	local hubGui = Instance.new("ScreenGui")
 	hubGui.Name = "SnowyHubUI"
@@ -250,11 +251,11 @@ local function buildHub()
 	local C_RED = Color3.fromRGB(255, 70, 70)
 
 	local state = {
-		esp = false, espTeamCheck = true, espMaxDist = 2000,
-		hitbox = false, hitboxScale = 2.5,
-		silentAim = false, silentFov = 120, wallCheck = true,
+		esp = false,
+		espTeamCheck = true,
+		espMaxDist = 2000,
+		espColor = Color3.fromRGB(255, 70, 70),
 	}
-	local ARSENAL_PLACE = 286090429
 
 	local espDrawings = {}
 	local ESP = {}
@@ -266,7 +267,7 @@ local function buildHub()
 			return { box = Drawing.new("Square"), name = Drawing.new("Text"), dist = Drawing.new("Text") }
 		end)
 		if not ok or not d then return nil end
-		d.box.Thickness = 1; d.box.Filled = false; d.box.Color = C_RED
+		d.box.Thickness = 1; d.box.Filled = false; d.box.Color = state.espColor
 		d.name.Size = 14; d.name.Center = true; d.name.Outline = true; d.name.Color = Color3.new(1,1,1)
 		d.dist.Size = 12; d.dist.Center = true; d.dist.Outline = true; d.dist.Color = Color3.new(1,1,1)
 		espDrawings[plr] = d
@@ -311,6 +312,7 @@ local function buildHub()
 			local w = h * 0.55
 			d.box.Size = Vector2.new(w, h)
 			d.box.Position = Vector2.new(top.X - w/2, top.Y)
+			d.box.Color = state.espColor
 			d.box.Visible = true
 			d.name.Text = plr.Name
 			d.name.Position = Vector2.new(top.X, top.Y - 16)
@@ -318,92 +320,6 @@ local function buildHub()
 			d.dist.Text = string.format("%dm", math.floor(dist))
 			d.dist.Position = Vector2.new(top.X, bottom.Y + 2)
 			d.dist.Visible = true
-		end
-	end
-
-	local hitboxOriginals = {}
-	local function applyHitbox(on)
-		local char = player.Character
-		if not char then return end
-		for _, name in ipairs({"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}) do
-			local part = char:FindFirstChild(name)
-			if not part or not part:IsA("BasePart") then continue end
-			if on then
-				if not hitboxOriginals[part] then
-					hitboxOriginals[part] = { size = part.Size, massless = part.Massless }
-				end
-				local orig = hitboxOriginals[part].size
-				part.Size = Vector3.new(orig.X * state.hitboxScale, orig.Y * state.hitboxScale, orig.Z * state.hitboxScale)
-				part.Massless = true
-				part.CanCollide = false
-			else
-				local orig = hitboxOriginals[part]
-				if orig then
-					part.Size = orig.size
-					part.Massless = orig.massless
-					part.CanCollide = (name == "HumanoidRootPart")
-				end
-			end
-		end
-	end
-
-	local silentTarget = nil
-	local function pickSilentTarget()
-		local cam = workspace.CurrentCamera
-		if not cam then return nil end
-		local me = player
-		local center = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2)
-		local best, bestDist = nil, state.silentFov
-		for _, plr in ipairs(Players:GetPlayers()) do
-			if plr == me then continue end
-			if plr.Team and me.Team and plr.Team == me.Team then continue end
-			local char = plr.Character
-			local head = char and char:FindFirstChild("Head")
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			if not head or not hum or hum.Health <= 0 then continue end
-			local sp, on = cam:WorldToViewportPoint(head.Position)
-			if not on then continue end
-			local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-			if d >= bestDist then continue end
-			if state.wallCheck then
-				local params = RaycastParams.new()
-				params.FilterType = Enum.RaycastFilterType.Exclude
-				params.FilterDescendantsInstances = { me.Character, cam }
-				local hit = workspace:Raycast(cam.CFrame.Position, head.Position - cam.CFrame.Position, params)
-				if hit and not hit.Instance:IsDescendantOf(char) then continue end
-			end
-			bestDist = d
-			best = plr
-		end
-		return best
-	end
-
-	local function arsenalTick()
-		ESP.tick()
-		if game.PlaceId ~= ARSENAL_PLACE then return end
-		if state.hitbox and not hitboxOriginals.__applied then
-			applyHitbox(true); hitboxOriginals.__applied = true
-		elseif not state.hitbox and hitboxOriginals.__applied then
-			applyHitbox(false); hitboxOriginals.__applied = false
-		end
-		if state.silentAim then
-			silentTarget = pickSilentTarget()
-			if silentTarget and hookmetamethod and not state.__silentHooked then
-				state.__silentHooked = true
-				pcall(function()
-					local mt = getrawmetatable(game)
-					local oldIndex = mt.__index
-					setreadonly(mt, false)
-					mt.__index = newcclosure(function(self, key)
-						if state.silentAim and key == "Hit" and checkcaller() == false and silentTarget then
-							local h = silentTarget.Character and silentTarget.Character:FindFirstChild("Head")
-							if h then return h.Position end
-						end
-						return oldIndex(self, key)
-					end)
-					setreadonly(mt, true)
-				end)
-			end
 		end
 	end
 
@@ -515,7 +431,7 @@ local function buildHub()
 		end)
 		if ok and content then avatar.Image = content end
 	end)
-	makeLabel(card, displayName, Enum.Font.GothamMedium, 14, Color3.new(1, 1, 1),
+	makeLabel(card, playerName, Enum.Font.GothamMedium, 14, Color3.new(1, 1, 1),
 		UDim2.fromOffset(62, 15), UDim2.fromOffset(158, 18))
 	makeLabel(card, "MEMBER", Enum.Font.GothamBold, 10, C_RED,
 		UDim2.fromOffset(62, 35), UDim2.fromOffset(158, 14))
@@ -603,7 +519,7 @@ local function buildHub()
 	local function makeCard(parent, y, title, subtitle, getFn, setFn)
 		local c = Instance.new("Frame")
 		c.Position = UDim2.fromOffset(20, y)
-		c.Size = UDim2.new(1, -40, 0, 72)
+		c.Size = UDim2.new(1, -40, 0, 62)
 		c.BackgroundColor3 = Color3.fromRGB(22, 12, 16)
 		c.BackgroundTransparency = 0.15
 		c.BorderSizePixel = 0
@@ -613,7 +529,7 @@ local function buildHub()
 		cs.Color = C_LINE; cs.Thickness = 1; cs.Transparency = 0.3; cs.Parent = c
 		local t = Instance.new("TextLabel")
 		t.BackgroundTransparency = 1
-		t.Position = UDim2.fromOffset(16, 12)
+		t.Position = UDim2.fromOffset(16, 10)
 		t.Size = UDim2.new(1, -120, 0, 20)
 		t.Font = Enum.Font.GothamBold
 		t.TextSize = 15
@@ -623,7 +539,7 @@ local function buildHub()
 		t.Parent = c
 		local s = Instance.new("TextLabel")
 		s.BackgroundTransparency = 1
-		s.Position = UDim2.fromOffset(16, 34)
+		s.Position = UDim2.fromOffset(16, 30)
 		s.Size = UDim2.new(1, -120, 0, 18)
 		s.Font = Enum.Font.GothamMedium
 		s.TextSize = 12
@@ -659,14 +575,13 @@ local function buildHub()
 			refresh()
 		end)
 		refresh()
-		
 		return c
 	end
 
 	local function makeSlider(parent, y, title, min, max, init, setFn)
 		local c = Instance.new("Frame")
 		c.Position = UDim2.fromOffset(20, y)
-		c.Size = UDim2.new(1, -40, 0, 68)
+		c.Size = UDim2.new(1, -40, 0, 58)
 		c.BackgroundColor3 = Color3.fromRGB(22, 12, 16)
 		c.BackgroundTransparency = 0.15
 		c.BorderSizePixel = 0
@@ -676,7 +591,7 @@ local function buildHub()
 		cs.Color = C_LINE; cs.Thickness = 1; cs.Transparency = 0.3; cs.Parent = c
 		local t = Instance.new("TextLabel")
 		t.BackgroundTransparency = 1
-		t.Position = UDim2.fromOffset(16, 10)
+		t.Position = UDim2.fromOffset(16, 8)
 		t.Size = UDim2.new(1, -100, 0, 18)
 		t.Font = Enum.Font.GothamBold
 		t.TextSize = 14
@@ -687,7 +602,7 @@ local function buildHub()
 		local val = Instance.new("TextLabel")
 		val.BackgroundTransparency = 1
 		val.AnchorPoint = Vector2.new(1, 0)
-		val.Position = UDim2.new(1, -16, 0, 10)
+		val.Position = UDim2.new(1, -16, 0, 8)
 		val.Size = UDim2.fromOffset(80, 18)
 		val.Font = Enum.Font.GothamBold
 		val.TextSize = 13
@@ -696,7 +611,7 @@ local function buildHub()
 		val.Text = tostring(init)
 		val.Parent = c
 		local bar = Instance.new("Frame")
-		bar.Position = UDim2.fromOffset(16, 44)
+		bar.Position = UDim2.fromOffset(16, 38)
 		bar.Size = UDim2.new(1, -32, 0, 6)
 		bar.BackgroundColor3 = Color3.fromRGB(40, 20, 24)
 		bar.BorderSizePixel = 0
@@ -734,6 +649,88 @@ local function buildHub()
 		end)
 	end
 
+	local function makeColorCard(parent, y)
+		local c = Instance.new("Frame")
+		c.Position = UDim2.fromOffset(20, y)
+		c.Size = UDim2.new(1, -40, 0, 138)
+		c.BackgroundColor3 = Color3.fromRGB(22, 12, 16)
+		c.BackgroundTransparency = 0.15
+		c.BorderSizePixel = 0
+		c.Parent = parent
+		Instance.new("UICorner", c).CornerRadius = UDim.new(0, 10)
+		local cs = Instance.new("UIStroke")
+		cs.Color = C_LINE; cs.Thickness = 1; cs.Transparency = 0.3; cs.Parent = c
+
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Position = UDim2.fromOffset(16, 8)
+		t.Size = UDim2.new(1, -100, 0, 18)
+		t.Font = Enum.Font.GothamBold
+		t.TextSize = 14
+		t.TextColor3 = Color3.new(1, 1, 1)
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		t.Text = "Box Color"
+		t.Parent = c
+
+		local preview = Instance.new("Frame")
+		preview.AnchorPoint = Vector2.new(1, 0)
+		preview.Position = UDim2.new(1, -16, 0, 8)
+		preview.Size = UDim2.fromOffset(60, 18)
+		preview.BackgroundColor3 = state.espColor
+		preview.BorderSizePixel = 0
+		preview.Parent = c
+		Instance.new("UICorner", preview).CornerRadius = UDim.new(0, 4)
+		local pStroke = Instance.new("UIStroke")
+		pStroke.Color = C_LINE; pStroke.Thickness = 1; pStroke.Transparency = 0.3; pStroke.Parent = preview
+
+		local grid = Instance.new("Frame")
+		grid.Position = UDim2.fromOffset(16, 34)
+		grid.Size = UDim2.new(1, -32, 0, 96)
+		grid.BackgroundTransparency = 1
+		grid.Parent = c
+		local gridList = Instance.new("UIGridLayout")
+		gridList.CellSize = UDim2.fromOffset(32, 18)
+		gridList.CellPadding = UDim2.fromOffset(5, 5)
+		gridList.SortOrder = Enum.SortOrder.LayoutOrder
+		gridList.Parent = grid
+
+		local palette = {}
+		for i = 0, 7 do
+			local v = 1 - i * 0.12
+			table.insert(palette, Color3.new(v, v, v))
+		end
+		local combos = {
+			{s = 1,   v = 1},
+			{s = 1,   v = 0.7},
+			{s = 0.5, v = 1},
+			{s = 1,   v = 0.4},
+		}
+		for _, cv in ipairs(combos) do
+			for i = 0, 7 do
+				table.insert(palette, Color3.fromHSV(i/8, cv.s, cv.v))
+			end
+		end
+
+		for i, col in ipairs(palette) do
+			local sw = Instance.new("TextButton")
+			sw.Size = UDim2.fromOffset(32, 18)
+			sw.BackgroundColor3 = col
+			sw.BorderSizePixel = 0
+			sw.Text = ""
+			sw.AutoButtonColor = false
+			sw.LayoutOrder = i
+			sw.Parent = grid
+			Instance.new("UICorner", sw).CornerRadius = UDim.new(0, 4)
+			sw.MouseButton1Click:Connect(function()
+				state.espColor = col
+				preview.BackgroundColor3 = col
+				for _, d in pairs(espDrawings) do
+					if d.box then d.box.Color = col end
+				end
+			end)
+		end
+	end
+
 	local sideTabs = Instance.new("Frame")
 	sideTabs.Position = UDim2.fromOffset(0, 160)
 	sideTabs.Size = UDim2.new(1, 0, 1, -(160 + 64))
@@ -751,7 +748,7 @@ local function buildHub()
 
 	local function makeTab(name, order, pageName)
 		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(1, -20, 0, 34)
+		btn.Size = UDim2.new(1, 0, 0, 34)
 		btn.BackgroundColor3 = Color3.fromRGB(28, 14, 18)
 		btn.BackgroundTransparency = 1
 		btn.BorderSizePixel = 0
@@ -766,7 +763,7 @@ local function buildHub()
 		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 		local bar = Instance.new("Frame")
 		bar.AnchorPoint = Vector2.new(0, 0.5)
-		bar.Position = UDim2.fromOffset(0, 0.5)
+		bar.Position = UDim2.new(0, 0, 0.5, 0)
 		bar.Size = UDim2.fromOffset(3, 18)
 		bar.BackgroundColor3 = C_RED
 		bar.BackgroundTransparency = 1
@@ -789,33 +786,19 @@ local function buildHub()
 	end
 
 	local homePage = makePage("Home")
-	local espPage = makePage("Player ESP")
-	local arsPage = makePage("Arsenal")
 
 	makeLabel(homePage, "Home", Enum.Font.GothamBold, 20, Color3.new(1, 1, 1), UDim2.fromOffset(20, 16), UDim2.fromOffset(300, 26))
-	makeLabel(homePage, "quick toggles", Enum.Font.GothamMedium, 12, C_DIM, UDim2.fromOffset(20, 44), UDim2.fromOffset(400, 18))
-	makeCard(homePage, 76, "Player ESP", "box + name + distance", function() return state.esp end, function(v) state.esp = v end)
-	makeCard(homePage, 156, "Silent Aim", "shots to nearest target", function() return state.silentAim end, function(v) state.silentAim = v end)
-	makeCard(homePage, 236, "Hitbox", "expand Head + torso", function() return state.hitbox end, function(v) state.hitbox = v end)
-	makeCard(homePage, 316, "Panic", "all off",
-		function() return (state.esp or state.silentAim or state.hitbox) end,
-		function() state.esp = false; state.silentAim = false; state.hitbox = false end)
+	makeLabel(homePage, "player esp", Enum.Font.GothamMedium, 12, C_DIM, UDim2.fromOffset(20, 44), UDim2.fromOffset(400, 18))
 
-	makeLabel(espPage, "Player ESP", Enum.Font.GothamBold, 20, Color3.new(1, 1, 1), UDim2.fromOffset(20, 16), UDim2.fromOffset(300, 26))
-	makeCard(espPage, 76, "Enable ESP", "box + name + distance", function() return state.esp end, function(v) state.esp = v end)
-	makeCard(espPage, 156, "Team check", "hide teammates", function() return state.espTeamCheck end, function(v) state.espTeamCheck = v end)
-	makeSlider(espPage, 236, "Max distance", 200, 5000, 2000, function(v) state.espMaxDist = v end)
-
-	makeLabel(arsPage, "Arsenal", Enum.Font.GothamBold, 20, Color3.new(1, 1, 1), UDim2.fromOffset(20, 16), UDim2.fromOffset(300, 26))
-	makeCard(arsPage, 76, "Silent Aim", "shots to nearest target", function() return state.silentAim end, function(v) state.silentAim = v end)
-	makeCard(arsPage, 156, "Wall Check", "skip walled targets", function() return state.wallCheck end, function(v) state.wallCheck = v end)
-	makeSlider(arsPage, 236, "Silent FOV", 20, 500, 120, function(v) state.silentFov = v end)
-	makeCard(arsPage, 312, "Hitbox Expander", "resize Head + torso", function() return state.hitbox end, function(v) state.hitbox = v end)
-	makeSlider(arsPage, 388, "Hitbox Scale", 1.5, 6, 2.5, function(v) state.hitboxScale = v end)
+	makeCard(homePage, 74, "Player ESP", "box + name + distance",
+		function() return state.esp end, function(v) state.esp = v end)
+	makeCard(homePage, 146, "Team Check", "hide teammates",
+		function() return state.espTeamCheck end, function(v) state.espTeamCheck = v end)
+	makeSlider(homePage, 218, "Max Distance", 200, 5000, 2000,
+		function(v) state.espMaxDist = v end)
+	makeColorCard(homePage, 286)
 
 	makeTab("Home", 1, "Home")
-	makeTab("Player ESP", 2, "Player ESP")
-	makeTab("Arsenal", 3, "Arsenal")
 	showPage("Home")
 
 	local hubFlakes = {}
@@ -841,7 +824,7 @@ local function buildHub()
 			if f.y > 1.05 then f.y = -0.05; f.x = rng:NextNumber(0, 1) end
 			f.frame.Position = UDim2.fromScale(f.x + math.sin(hubT + f.phase) * 0.01, f.y)
 		end
-		arsenalTick()
+		ESP.tick()
 	end)
 
 	local foot = Instance.new("Frame")
