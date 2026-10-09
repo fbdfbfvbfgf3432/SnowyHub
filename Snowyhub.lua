@@ -1,6 +1,6 @@
 --!strict
--- Snowy Hub — kill/HS tracking fixed (aim-based + trigger-based both credit),
--- widget bumped to 300x300 so nothing clips. Aim cframe-locked, mm2 universal.
+-- Snowy Hub — hitbox expander added (client-side part scaling on enemies),
+-- aim cframe-locked, mm2 universal, Binds page, fixed stats tracking.
 
 local Players             = game:GetService("Players")
 local RunService          = game:GetService("RunService")
@@ -25,6 +25,7 @@ pcall(function() RunService:UnbindFromRenderStep("SnowyFov") end)
 pcall(function() RunService:UnbindFromRenderStep("SnowyAim") end)
 pcall(function() RunService:UnbindFromRenderStep("SnowyEsp") end)
 pcall(function() RunService:UnbindFromRenderStep("SnowyTrigger") end)
+pcall(function() RunService:UnbindFromRenderStep("SnowyHitbox") end)
 pcall(function()
     local parent = (gethui and gethui() or CoreGui)
     local old = parent:FindFirstChild("SnowyHubUI"); if old then old:Destroy() end
@@ -37,7 +38,7 @@ local HUB_TAG     = "V1.0"
 local SPLASH_TIME = 8
 local AUDIO_VOL   = 0.6
 local HUB_NAME    = "Snowy Hub"
-local HUB_VERSION = "V1.2"
+local HUB_VERSION = "V1.3"
 local LOGO_ASPECT = 0.8325
 
 local ACCENT  = Color3.fromRGB(124, 108, 255)
@@ -518,8 +519,14 @@ local feat = {
     key_fov = Enum.KeyCode.J,
     key_trig = Enum.KeyCode.L,
     key_hub = Enum.KeyCode.RightShift,
+    key_hbx = Enum.KeyCode.H,
     trig_on = false, trig_delay = 0.03, trig_fov = 12,
     trig_tb = true, trig_wall = false,
+    -- hitbox expander
+    hbx_on = false,
+    hbx_scale = 2.5,
+    hbx_head = true,
+    hbx_body = true,
 }
 
 local extra = {
@@ -535,10 +542,11 @@ local sessionStats = {
     damage_dealt = 0, last_kill = 0,
 }
 
--- health memory: [plr] = last known HP
 local healthTrack = {}
--- dmgCredit: [plr] = { at = tick, head = bool }
 local dmgCredit = {}
+
+-- hitbox store: [part] = original Size
+local hbxOriginals = {}
 
 local _savedLighting = {
     Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
@@ -1353,12 +1361,80 @@ local function rejoin()
 end
 
 -- ============================================================
+-- HITBOX EXPANDER
+-- ============================================================
+local function restoreHitboxes()
+    for part, orig in pairs(hbxOriginals) do
+        if part and part.Parent then
+            pcall(function() part.Size = orig end)
+        end
+    end
+    hbxOriginals = {}
+end
+
+local function applyHitboxTo(part, scale)
+    if not part or not part.Parent then return end
+    if not hbxOriginals[part] then
+        hbxOriginals[part] = part.Size
+    end
+    local base = hbxOriginals[part]
+    pcall(function()
+        part.Size = Vector3.new(base.X * scale, base.Y * scale, base.Z * scale)
+    end)
+end
+
+local function tickHitboxExpander()
+    if not feat.hbx_on then
+        if next(hbxOriginals) then restoreHitboxes() end
+        return
+    end
+    local scale = feat.hbx_scale or 1
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and isAlive(plr) then
+            local ch = plr.Character
+            if ch then
+                local sameTeam = feat.aim_tb and plr.Team and player.Team and plr.Team == player.Team
+                if not sameTeam then
+                    if feat.hbx_head then
+                        applyHitboxTo(ch:FindFirstChild("Head"), scale)
+                    end
+                    if feat.hbx_body then
+                        applyHitboxTo(ch:FindFirstChild("HumanoidRootPart"), scale)
+                        applyHitboxTo(ch:FindFirstChild("UpperTorso"), scale)
+                        applyHitboxTo(ch:FindFirstChild("LowerTorso"), scale)
+                        applyHitboxTo(ch:FindFirstChild("Torso"), scale)
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function initHitboxExpander()
+    RunService:BindToRenderStep("SnowyHitbox", Enum.RenderPriority.Camera.Value + 3, function()
+        tickHitboxExpander()
+    end)
+    Players.PlayerRemoving:Connect(function(plr)
+        local ch = plr.Character
+        if ch then
+            for _, name in ipairs({"Head","HumanoidRootPart","UpperTorso","LowerTorso","Torso"}) do
+                local part = ch:FindFirstChild(name)
+                if part and hbxOriginals[part] then
+                    pcall(function() part.Size = hbxOriginals[part] end)
+                    hbxOriginals[part] = nil
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================================
 -- PAGES
 -- ============================================================
 local function buildHomePage()
     local p = makePage("Home")
     makePageHeader(p, "Home", "Aim Driver: cframe (universal)")
-    local scroll = makeStack(p, 1600)
+    local scroll = makeStack(p, 1800)
 
     local ord = 0
     local function N() ord = ord + 1; return ord end
@@ -1377,6 +1453,17 @@ local function buildHomePage()
         function(v) feat.aim_smooth = v end, N())
     makeDropdown(scroll, "Target Part", {"Head","HumanoidRootPart","UpperTorso","Torso"},
         function() return feat.aim_part end, function(v) feat.aim_part = v end, N())
+
+    makeSection(scroll, "Hitbox Expander", N())
+
+    makeCard(scroll, "Hitbox Expander (H)", "Scale Enemy Parts Client-Side",
+        function() return feat.hbx_on end, function(v) feat.hbx_on = v end, N())
+    makeSlider(scroll, "Hitbox Scale", 1, 8, feat.hbx_scale,
+        function(v) feat.hbx_scale = v end, N())
+    makeCard(scroll, "Expand · Head", "Bigger Head Part",
+        function() return feat.hbx_head end, function(v) feat.hbx_head = v end, N())
+    makeCard(scroll, "Expand · Body", "Bigger Torso + HRP",
+        function() return feat.hbx_body end, function(v) feat.hbx_body = v end, N())
 
     makeSection(scroll, "Triggerbot", N())
 
@@ -1425,6 +1512,8 @@ local function buildBindsPage()
         function(k) feat.key_fov = k end, N())
     makeKeybind(scroll, "Toggle Trigger", function() return feat.key_trig end,
         function(k) feat.key_trig = k end, N())
+    makeKeybind(scroll, "Toggle Hitbox Expander", function() return feat.key_hbx end,
+        function(k) feat.key_hbx = k end, N())
     makeKeybind(scroll, "Toggle Hub UI", function() return feat.key_hub end,
         function(k) feat.key_hub = k end, N())
 end
@@ -1861,7 +1950,7 @@ local function openHub()
 end
 
 -- ============================================================
--- STATS WIDGET (300x300, TextSize 13)
+-- STATS WIDGET
 -- ============================================================
 local function initStatsWidget()
     local statsWidget = Instance.new("Frame")
@@ -2086,7 +2175,6 @@ local function initTrigger()
             task.wait(0.04)
             VirtualInputManager:SendMouseButtonEvent(vp.X/2, vp.Y/2, 0, false, game, 0)
         end)
-        -- trigger counts as our damage
         local isHead = hit.Instance.Name == "Head"
         dmgCredit[hitPlr] = { at = tick(), head = isHead }
     end)
@@ -2222,11 +2310,6 @@ local function initFov()
     end)
 end
 
--- ============================================================
--- STATS TRACKER — fixes kill/HS counting for aimbot-only users
--- watches every enemy health drop, credits if we're aimed at them
--- or recently shot them via trigger
--- ============================================================
 local function initStatsTracker()
     task.spawn(function()
         while true do
@@ -2241,7 +2324,6 @@ local function initStatsTracker()
                         if last == nil then last = hum.MaxHealth end
 
                         if last > now then
-                            -- enemy took damage this tick. was it us?
                             local aimingAt = S.currentTarget and S.currentTarget.Parent == ch
                             local recentTrigger = dmgCredit[plr] and (tick() - dmgCredit[plr].at) < 2.0
                             local aimingHead = aimingAt and feat.aim_part == "Head" and S.currentTarget.Name == "Head"
@@ -2421,6 +2503,10 @@ local function initInput()
         elseif input.KeyCode == feat.key_trig then
             feat.trig_on = not feat.trig_on
             refreshAllCards()
+        elseif input.KeyCode == feat.key_hbx then
+            feat.hbx_on = not feat.hbx_on
+            if not feat.hbx_on then restoreHitboxes() end
+            refreshAllCards()
         end
     end)
 end
@@ -2575,6 +2661,7 @@ initEsp()
 initAim()
 initTrigger()
 initFov()
+initHitboxExpander()
 buildHomePage()
 buildBindsPage()
 buildCustomizePage()
